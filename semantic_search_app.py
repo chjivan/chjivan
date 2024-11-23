@@ -1,3 +1,4 @@
+# Save this file with a .py extension, e.g., semantic_search_app.py
 import streamlit as st
 import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -26,6 +27,23 @@ query = st.text_input("Enter your search query:")
 
 # Step 4: Data Analysis - Compute Semantic Similarity
 if query:
+    # Optional: Expand dataset with Wikipedia API results based on the search query
+    url = "https://en.wikipedia.org/w/api.php"
+    params = {
+        "action": "query",
+        "list": "search",
+        "srsearch": query,
+        "format": "json"
+    }
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        search_results = response.json()["query"]["search"]
+        for result in search_results:
+            documents.append(result["snippet"])
+    
+    # Re-create the DataFrame with updated documents
+    data = pd.DataFrame({"Document": documents})
+
     # Calculate TF-IDF for both the documents and the query
     vectorizer = TfidfVectorizer()
     vectors = vectorizer.fit_transform(data["Document"].tolist() + [query])
@@ -42,20 +60,3 @@ if query:
         st.write(f"- **Document**: {row['Document']}")
         st.write("---")
 
-# Optional Step: Data Expansion with APIs
-# Use RapidAPI to connect to external APIs to dynamically expand the dataset.
-# Example: Adding Wikipedia articles based on a search term
-"""
-    url = "https://en.wikipedia.org/w/api.php"
-    params = {
-        "action": "query",
-        "list": "search",
-        "srsearch": query,
-        "format": "json"
-    }
-    response = requests.get(url, params=params)
-    if response.status_code == 200:
-        search_results = response.json()["query"]["search"]
-        for result in search_results:
-            documents.append(result["snippet"])
-"""
