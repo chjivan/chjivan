@@ -28,7 +28,7 @@ def get_movie_data(query, genre_filter=None, min_rating=None, release_year=None)
         if genre_filter or min_rating or release_year:
             filtered_movies = []
             for movie in movies:
-                if genre_filter and genre_filter.lower() not in [genre['name'].lower() for genre in movie.get('genre_ids', [])]:
+                if genre_filter and genre_filter.lower() not in []:
                     continue
                 if min_rating and movie.get('vote_average', 0) < min_rating:
                     continue
@@ -97,7 +97,13 @@ if user_query:
             # Display sorted results
             for movie, similarity in sorted_results:
                 st.subheader(f"{movie['title']} ({movie.get('release_date', 'N/A')[:4]})")
-                st.write(f"**Rating**: {movie.get('vote_average', 'N/A')} / 10")
+                # Visualize rating with stars
+                rating = movie.get('vote_average', 'N/A')
+                if rating != 'N/A':
+                    stars = '🌟' * int(rating // 2)
+                    st.write(f"**Rating**: {rating} / 10 {stars}")
+                else:
+                    st.write(f"**Rating**: {rating} / 10")
                 st.write(f"**Overview**: {movie['overview']}")
                 st.write(f"**Similarity Score**: {similarity:.2f}")
                 st.image(f"https://image.tmdb.org/t/p/w500{movie.get('poster_path')}", use_column_width=True)
