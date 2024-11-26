@@ -25,20 +25,37 @@ def get_movie_data(query, genre_filter=None, min_rating=None, release_year=None)
         movies = data.get("results", [])
         
         # Apply genre, rating, and release year filters
-        if genre_filter or min_rating or release_year:
-            filtered_movies = []
-            for movie in movies:
-                if genre_filter and genre_filter.lower() not in []:
+        filtered_movies = []
+        for movie in movies:
+            if min_rating and movie.get('vote_average', 0) < min_rating:
+                continue
+            if release_year:
+                try:
+                    if release_year != datetime.strptime(movie.get('release_date', 'N/A'), "%Y-%m-%d").year:
+                        continue
+                except ValueError:
                     continue
-                if min_rating and movie.get('vote_average', 0) < min_rating:
+            if genre_filter:
+                movie_id = movie.get("id")
+                genre_matched = check_movie_genre(movie_id, genre_filter)
+                if not genre_matched:
                     continue
-                if release_year and release_year != datetime.strptime(movie.get('release_date', 'N/A'), "%Y-%m-%d").year:
-                    continue
-                filtered_movies.append(movie)
-            return filtered_movies
-        return movies
+            filtered_movies.append(movie)
+        return filtered_movies
     else:
         return []
+
+def check_movie_genre(movie_id, genre_filter):
+    """
+    Check if a specific movie has the desired genre.
+    """
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        genres = [genre["name"].lower() for genre in data.get("genres", [])]
+        return genre_filter.lower() in genres
+    return False
 
 # Step 4: Set Up Semantic Search Pipeline
 def setup_semantic_search():
@@ -118,4 +135,3 @@ if user_query:
 
 # Step 8: Run the Streamlit app
 # Save this script as `app.py` and run using the command `streamlit run app.py`
-
