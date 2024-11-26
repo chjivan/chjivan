@@ -2,3 +2,5 @@ streamlit
 requests
 numpy
 sentence-transformers
+fuzzywuzzy
+python-Levenshtein  # 可选，提升 fuzzywuzzy 的性能
