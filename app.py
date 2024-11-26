@@ -1,6 +1,6 @@
 # Step 1: Install Required Packages
 # Make sure to install the following Python packages first
-# pip install streamlit requests transformers
+# pip install streamlit requests transformers sentence-transformers
 
 import streamlit as st
 import requests
@@ -88,7 +88,10 @@ if user_query:
             # Calculate cosine similarity between user query vector and movie overview vectors
             def cosine_similarity(v1, v2):
                 v1, v2 = np.array(v1).flatten(), np.array(v2).flatten()
-                return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+                # Ensure vectors are normalized to avoid numerical issues
+                v1_norm = v1 / np.linalg.norm(v1)
+                v2_norm = v2 / np.linalg.norm(v2)
+                return np.dot(v1_norm, v2_norm)
 
             # Rank movies by similarity
             similarities = [cosine_similarity(user_vector, overview_vector) for overview_vector in overview_vectors]
@@ -115,3 +118,4 @@ if user_query:
 
 # Step 8: Run the Streamlit app
 # Save this script as `app.py` and run using the command `streamlit run app.py`
+
