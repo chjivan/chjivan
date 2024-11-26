@@ -1,6 +1,6 @@
 # Step 1: Install Required Packages
 # Make sure to install the following Python packages first
-# pip install streamlit requests transformers sentence-transformers fuzzywuzzy
+# pip install streamlit requests transformers sentence-transformers fuzzywuzzy python-Levenshtein
 
 import streamlit as st
 import requests
@@ -143,4 +143,3 @@ if user_query:
 
 # Step 8: Run the Streamlit app
 # Save this script as `app.py` and run using the command `streamlit run app.py`
-
