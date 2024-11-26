@@ -1,12 +1,14 @@
 # Step 1: Install Required Packages
 # Make sure to install the following Python packages first
-# pip install streamlit requests transformers
+# pip install streamlit requests transformers sentence-transformers fuzzywuzzy
 
 import streamlit as st
 import requests
 from sentence_transformers import SentenceTransformer
 import numpy as np
 from datetime import datetime
+from fuzzywuzzy import fuzz
+from fuzzywuzzy import process
 
 # Step 2: API Setup
 # You need to get an API key from TMDb or IMDb for accessing movie data
@@ -25,57 +27,100 @@ def get_movie_data(query, genre_filter=None, min_rating=None, release_year=None)
         movies = data.get("results", [])
         
         # Apply genre, rating, and release year filters
-        if genre_filter or min_rating or release_year:
-            filtered_movies = []
-            for movie in movies:
-                if genre_filter and genre_filter.lower() not in []:
+        filtered_movies = []
+        for movie in movies:
+            if min_rating and movie.get('vote_average', 0) < min_rating:
+                continue
+            if release_year:
+                try:
+                    if release_year != datetime.strptime(movie.get('release_date', 'N/A'), "%Y-%m-%d").year:
+                        continue
+                except ValueError:
                     continue
-                if min_rating and movie.get('vote_average', 0) < min_rating:
+            if genre_filter:
+                movie_id = movie.get("id")
+                genre_matched = check_movie_genre(movie_id, genre_filter)
+                if not genre_matched:
                     continue
-                if release_year and release_year != datetime.strptime(movie.get('release_date', 'N/A'), "%Y-%m-%d").year:
-                    continue
-                filtered_movies.append(movie)
-            return filtered_movies
-        return movies
+            filtered_movies.append(movie)
+        return filtered_movies
     else:
         return []
+
+def check_movie_genre(movie_id, genre_filter):
+    """
+    Check if a specific movie has the desired genre.
+    """
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        genres = [genre["name"].lower() for genre in data.get("genres", [])]
+        return genre_filter.lower() in genres
+    return False
 
 # Step 4: Set Up Semantic Search Pipeline
 def setup_semantic_search():
     """
     Set up a semantic search model using the sentence_transformers library.
     """
-    # Using a more powerful model to improve similarity scoring
-    return SentenceTransformer('all-mpnet-base-v2')
+    return SentenceTransformer('all-MiniLM-L6-v2')
 
 semantic_search_model = setup_semantic_search()
 
 # Step 5: Define the Streamlit App Layout
-st.set_page_config(page_title="Movie and Entertainment Semantic Search", layout="wide")
+st.set_page_config(page_title="Movie and Entertainment Semantic Search", layout="wide", initial_sidebar_state="expanded")
+st.title("🎬 Movie and Entertainment Semantic Search")
+st.write("Search for movies and entertainment content using a semantic search engine powered by NLP and fuzzy matching.")
 
-st.title("Movie and Entertainment Semantic Search")
-user_query = st.text_input("Enter a movie or entertainment-related query:")
+# Sidebar filters for an enhanced user experience
+st.sidebar.header("🔍 Filters")
+min_rating = st.sidebar.slider("Minimum Rating", 0, 10, 5)
+genre_filter = st.sidebar.text_input("Genre (e.g., Action, Comedy, Drama)")
+release_year = st.sidebar.text_input("Release Year (e.g., 2020)")
 
-# Step 6: Process User Query
+# User input for the search query
+user_query = st.text_input("Enter a movie or topic to search for:")
+
 if user_query:
-    st.write("Searching for movies related to:", user_query)
-    movie_results = get_movie_data(user_query)
+    # Step 6: Get Movie Data
+    try:
+        release_year = int(release_year) if release_year else None
+    except ValueError:
+        st.sidebar.error("Please enter a valid year.")
+        release_year = None
+    
+    movie_results = get_movie_data(user_query, genre_filter, min_rating, release_year)
 
-    if movie_results:
-        movie_overviews = [movie["overview"] for movie in movie_results if movie["overview"]]
-        
+    if not movie_results:
+        st.write("No movies found matching your search.")
+    else:
+        # Step 7: Apply Fuzzy Matching to the Titles
+        titles = [movie["title"] for movie in movie_results]
+        fuzzy_matched_titles = process.extract(user_query, titles, scorer=fuzz.partial_ratio, limit=10)
+
+        # Filter movies based on fuzzy matching results
+        fuzzy_filtered_movies = [movie for movie in movie_results if movie["title"] in dict(fuzzy_matched_titles)]
+
+        # Extract movie overviews for semantic analysis
+        movie_overviews = [movie["overview"] for movie in fuzzy_filtered_movies if movie["overview"]]
+
         if movie_overviews:
             # Get semantic representations of the user's query and movie overviews
-            user_vector = semantic_search_model.encode(user_query, normalize_embeddings=True)
-            overview_vectors = semantic_search_model.encode(movie_overviews, normalize_embeddings=True)
+            user_vector = semantic_search_model.encode(user_query)
+            overview_vectors = [semantic_search_model.encode(overview) for overview in movie_overviews]
 
             # Calculate cosine similarity between user query vector and movie overview vectors
             def cosine_similarity(v1, v2):
-                return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+                v1, v2 = np.array(v1).flatten(), np.array(v2).flatten()
+                # Ensure vectors are normalized to avoid numerical issues
+                v1_norm = v1 / np.linalg.norm(v1)
+                v2_norm = v2 / np.linalg.norm(v2)
+                return np.dot(v1_norm, v2_norm)
 
             # Rank movies by similarity
             similarities = [cosine_similarity(user_vector, overview_vector) for overview_vector in overview_vectors]
-            sorted_results = sorted(zip(movie_results, similarities), key=lambda x: x[1], reverse=True)
+            sorted_results = sorted(zip(fuzzy_filtered_movies, similarities), key=lambda x: x[1], reverse=True)
 
             # Display sorted results
             for movie, similarity in sorted_results:
@@ -98,3 +143,4 @@ if user_query:
 
 # Step 8: Run the Streamlit app
 # Save this script as `app.py` and run using the command `streamlit run app.py`
+
